@@ -7,3 +7,5 @@ export * from './SettingsLoading';
 export * from './SettingsSectionCard';
 export * from './SettingsCategoryNav';
 export * from './AuthSettingsCard';
+export * from './SettingsHeaderActionsCard';
+export * from './EnvImportPreviewCard';

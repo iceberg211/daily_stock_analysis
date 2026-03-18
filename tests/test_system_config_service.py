@@ -341,6 +341,44 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertIn("MAX_WORKERS=1", joined)
         self.assertIn("reload_now=false", joined)
 
+    def test_export_env_content_returns_plain_text_payload(self) -> None:
+        payload = self.service.export_env_content()
+
+        self.assertIn("filename", payload)
+        self.assertTrue(payload["filename"].endswith(".env"))
+        self.assertIn("STOCK_LIST=600519,000001", payload["content"])
+        self.assertGreater(payload["byte_size"], 0)
+
+    def test_import_env_content_overwrites_file_and_returns_metadata(self) -> None:
+        payload = self.service.import_env_content(
+            content_bytes="STOCK_LIST=300750\nLOG_LEVEL=DEBUG\n".encode("utf-8"),
+            reload_now=False,
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["imported_line_count"], 2)
+        self.assertEqual(payload["imported_byte_size"], len("STOCK_LIST=300750\nLOG_LEVEL=DEBUG\n".encode("utf-8")))
+        self.assertFalse(payload["reload_triggered"])
+        self.assertIn("STOCK_LIST=300750\n", self.env_path.read_text(encoding="utf-8"))
+
+    def test_import_env_content_rejects_non_utf8_input(self) -> None:
+        with self.assertRaises(ValueError):
+            self.service.import_env_content(
+                content_bytes=b"\xff\xfe\xfa",
+                reload_now=False,
+            )
+
+    @patch.object(SystemConfigService, "_reload_runtime_singletons")
+    def test_import_env_content_with_reload_resets_runtime_singletons(self, mock_reload_runtime_singletons) -> None:
+        payload = self.service.import_env_content(
+            content_bytes=b"STOCK_LIST=600519\n",
+            reload_now=True,
+        )
+
+        self.assertTrue(payload["success"])
+        self.assertTrue(payload["reload_triggered"])
+        mock_reload_runtime_singletons.assert_called_once()
+
 
     def test_validate_rejects_comma_only_api_key(self) -> None:
         """Whitespace/comma-only api_key must fail validation (P2: parsed-segment check)."""

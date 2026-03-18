@@ -42,6 +42,7 @@
 | 策略 | 市场策略系统 | 内置 A股「三段式复盘策略」与美股「Regime Strategy」，输出进攻/均衡/防守或 risk-on/neutral/risk-off 计划，并附“仅供参考，不构成投资建议”提示 |
 | 复盘 | 大盘复盘 | 每日市场概览、板块涨跌；支持 cn(A股)/us(美股)/both(两者) 切换 |
 | 智能导入 | 多源导入 | 支持图片、CSV/Excel 文件、剪贴板粘贴；Vision LLM 提取代码+名称；置信度分层确认；名称→代码解析（本地+拼音+AkShare） |
+| 配置管理 | `.env` 导入导出 | 设置页支持一键导出当前 `.env` 备份，并支持导入覆盖恢复（含运行时重载） |
 | 历史记录 | 批量管理 | 支持多选、全选及批量删除历史分析记录，优化管理效率与 UI/UX 体验 |
 | 回测 | AI 回测验证 | 自动评估历史分析准确率，方向胜率、止盈止损命中率 |
 | **Agent 问股** | **策略对话** | **多轮策略问答，支持均线金叉/缠论/波浪等 11 种内置策略，Web/Bot/API 全链路** |
@@ -341,6 +342,17 @@ LITELLM_MODEL=openai/deepseek-chat
 - 图片：JPG/PNG/WebP/GIF，≤5MB；文件：≤2MB；粘贴文本：≤100KB
 
 **API**：`POST /api/v1/stocks/extract-from-image`（图片）、`POST /api/v1/stocks/parse-import`（文件/粘贴）。详见 [完整指南](docs/full-guide.md)。
+
+### `.env` 导入导出
+
+在 **设置页右上角** 可直接使用：
+
+1. **导出 `.env`**：下载当前运行中的配置文件，建议在升级桌面端前先导出备份。
+2. **导入 `.env`**：上传本地备份并覆盖当前配置，导入后会自动触发配置重载。
+
+对应 API：
+- `GET /api/v1/system/config/env-export`
+- `POST /api/v1/system/config/env-import`（`multipart/form-data`，字段名 `file`）
 
 **LLM 用量查询**：`GET /api/v1/usage/summary?period=today|month|all`，返回按调用类型和模型分组的 token 消耗汇总（`total_calls`、`total_tokens`、`by_call_type`、`by_model`）。
 

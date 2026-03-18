@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 import re
 import time
@@ -34,6 +35,7 @@ from src.core.config_registry import (
 )
 
 logger = logging.getLogger(__name__)
+_MAX_ENV_IMPORT_BYTES = 512 * 1024
 
 
 class ConfigValidationError(Exception):
@@ -114,6 +116,66 @@ class SystemConfigService:
             "mask_token": mask_token,
             "items": items,
             "updated_at": self._manager.get_updated_at(),
+        }
+
+    def export_env_content(self) -> Dict[str, Any]:
+        """Return current `.env` plain text for download."""
+        env_path = self._manager.env_path
+        content = ""
+        if env_path.exists():
+            content = env_path.read_text(encoding="utf-8")
+
+        file_name = f"dsa-config-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.env"
+        return {
+            "filename": file_name,
+            "content": content,
+            "byte_size": len(content.encode("utf-8")),
+        }
+
+    def import_env_content(
+        self,
+        *,
+        content_bytes: bytes,
+        reload_now: bool = True,
+    ) -> Dict[str, Any]:
+        """Import full `.env` content and optionally reload runtime config."""
+        imported_byte_size = len(content_bytes)
+        if imported_byte_size > _MAX_ENV_IMPORT_BYTES:
+            raise ValueError(f"`.env` file is too large (max {_MAX_ENV_IMPORT_BYTES} bytes)")
+
+        try:
+            decoded_content = content_bytes.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("`.env` file must be UTF-8 encoded text") from exc
+
+        if "\x00" in decoded_content:
+            raise ValueError("`.env` file contains unsupported null byte characters")
+
+        normalized_content = decoded_content.replace("\r\n", "\n").replace("\r", "\n")
+        imported_line_count = len(normalized_content.splitlines())
+        new_version = self._manager.overwrite_content(normalized_content)
+
+        warnings: List[str] = []
+        reload_triggered = False
+        if reload_now:
+            try:
+                Config.reset_instance()
+                self._reload_runtime_singletons()
+                setup_env(override=True)
+                config = Config.get_instance()
+                warnings.extend(config.validate())
+                reload_triggered = True
+            except Exception as exc:  # pragma: no cover - defensive branch
+                logger.error("Configuration reload failed after env import: %s", exc, exc_info=True)
+                warnings.append("Configuration imported but runtime reload failed")
+
+        return {
+            "success": True,
+            "config_version": new_version,
+            "reload_triggered": reload_triggered,
+            "imported_line_count": imported_line_count,
+            "imported_byte_size": imported_byte_size,
+            "warnings": warnings,
         }
 
     def validate(self, items: Sequence[Dict[str, str]], mask_token: str = "******") -> Dict[str, Any]:

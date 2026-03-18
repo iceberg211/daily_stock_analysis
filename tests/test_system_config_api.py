@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """Integration tests for system configuration API endpoints."""
 
+from io import BytesIO
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 from tests.litellm_stub import ensure_litellm_stub
 
@@ -151,6 +152,44 @@ class SystemConfigApiTestCase(unittest.TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["resolved_model"], "openai/gpt-4o-mini")
         mock_test.assert_called_once()
+
+    def test_export_system_env_endpoint_returns_plain_text_file(self) -> None:
+        response = system_config.export_system_env(service=self.service)
+
+        body = response.body.decode("utf-8")
+        self.assertIn("STOCK_LIST=600519,000001", body)
+        self.assertIn("attachment; filename=", response.headers.get("content-disposition", ""))
+
+    def test_import_system_env_endpoint_overwrites_config(self) -> None:
+        upload = UploadFile(
+            file=BytesIO(b"STOCK_LIST=300750\nLOG_LEVEL=DEBUG\n"),
+            filename=".env",
+        )
+        payload = system_config.import_system_env(
+            file=upload,
+            reload_now=False,
+            service=self.service,
+        ).model_dump()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["imported_line_count"], 2)
+        env_content = self.env_path.read_text(encoding="utf-8")
+        self.assertIn("STOCK_LIST=300750\n", env_content)
+
+    def test_import_system_env_endpoint_rejects_invalid_file_encoding(self) -> None:
+        upload = UploadFile(
+            file=BytesIO(b"\xff\xfe\xfa"),
+            filename="broken.env",
+        )
+        with self.assertRaises(HTTPException) as context:
+            system_config.import_system_env(
+                file=upload,
+                reload_now=False,
+                service=self.service,
+            )
+
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertEqual(context.exception.detail["error"], "invalid_env_file")
 
 
 if __name__ == "__main__":

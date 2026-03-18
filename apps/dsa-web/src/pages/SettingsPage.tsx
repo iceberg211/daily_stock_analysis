@@ -1,28 +1,54 @@
 import type React from 'react';
 import { useEffect } from 'react';
-import { useAuth, useSystemConfig } from '../hooks';
-import { ApiErrorAlert, Button } from '../components/common';
+import { ApiErrorAlert } from '../components/common';
 import {
   AuthSettingsCard,
   ChangePasswordCard,
   IntelligentImport,
   LLMChannelEditor,
-  SettingsCategoryNav,
   SettingsAlert,
+  SettingsCategoryNav,
   SettingsField,
   SettingsLoading,
   SettingsSectionCard,
 } from '../components/settings';
-import { getCategoryDescriptionZh } from '../utils/systemConfigI18n';
+import { SettingsHeaderActionsCard } from '../components/settings/SettingsHeaderActionsCard';
+import { useAuth, useSystemConfig } from '../hooks';
 import type { SystemConfigCategory } from '../types/systemConfig';
+import { getCategoryDescriptionZh } from '../utils/systemConfigI18n';
+
+const LLM_CHANNEL_KEY_RE = /^LLM_[A-Z0-9]+_(PROTOCOL|BASE_URL|API_KEY|API_KEYS|MODELS|EXTRA_HEADERS|ENABLED)$/;
+const AI_MODEL_HIDDEN_KEYS = new Set([
+  'LLM_CHANNELS',
+  'LLM_TEMPERATURE',
+  'LITELLM_MODEL',
+  'AGENT_LITELLM_MODEL',
+  'LITELLM_FALLBACK_MODELS',
+  'AIHUBMIX_KEY',
+  'DEEPSEEK_API_KEY',
+  'DEEPSEEK_API_KEYS',
+  'GEMINI_API_KEY',
+  'GEMINI_API_KEYS',
+  'GEMINI_MODEL',
+  'GEMINI_MODEL_FALLBACK',
+  'GEMINI_TEMPERATURE',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_API_KEYS',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_TEMPERATURE',
+  'ANTHROPIC_MAX_TOKENS',
+  'OPENAI_API_KEY',
+  'OPENAI_API_KEYS',
+  'OPENAI_BASE_URL',
+  'OPENAI_MODEL',
+  'OPENAI_VISION_MODEL',
+  'OPENAI_TEMPERATURE',
+  'VISION_MODEL',
+]);
+const SYSTEM_HIDDEN_KEYS = new Set(['ADMIN_AUTH_ENABLED']);
 
 const SettingsPage: React.FC = () => {
   const { passwordChangeable } = useAuth();
-
-  // Set page title
-  useEffect(() => {
-    document.title = '系统设置 - DSA';
-  }, []);
 
   const {
     categories,
@@ -45,9 +71,14 @@ const SettingsPage: React.FC = () => {
     resetDraft,
     setDraftValue,
     refreshAfterExternalSave,
+    serverItems,
     configVersion,
     maskToken,
   } = useSystemConfig();
+
+  useEffect(() => {
+    document.title = '系统设置 - DSA';
+  }, []);
 
   useEffect(() => {
     void load();
@@ -72,39 +103,6 @@ const SettingsPage: React.FC = () => {
   const hasConfiguredChannels = Boolean((rawActiveItemMap.get('LLM_CHANNELS') || '').trim());
   const hasLitellmConfig = Boolean((rawActiveItemMap.get('LITELLM_CONFIG') || '').trim());
 
-  // Hide channel-managed and legacy provider-specific LLM keys from the
-  // generic form only when channel config is the active runtime source.
-  const LLM_CHANNEL_KEY_RE = /^LLM_[A-Z0-9]+_(PROTOCOL|BASE_URL|API_KEY|API_KEYS|MODELS|EXTRA_HEADERS|ENABLED)$/;
-  const AI_MODEL_HIDDEN_KEYS = new Set([
-    'LLM_CHANNELS',
-    'LLM_TEMPERATURE',
-    'LITELLM_MODEL',
-    'AGENT_LITELLM_MODEL',
-    'LITELLM_FALLBACK_MODELS',
-    'AIHUBMIX_KEY',
-    'DEEPSEEK_API_KEY',
-    'DEEPSEEK_API_KEYS',
-    'GEMINI_API_KEY',
-    'GEMINI_API_KEYS',
-    'GEMINI_MODEL',
-    'GEMINI_MODEL_FALLBACK',
-    'GEMINI_TEMPERATURE',
-    'ANTHROPIC_API_KEY',
-    'ANTHROPIC_API_KEYS',
-    'ANTHROPIC_MODEL',
-    'ANTHROPIC_TEMPERATURE',
-    'ANTHROPIC_MAX_TOKENS',
-    'OPENAI_API_KEY',
-    'OPENAI_API_KEYS',
-    'OPENAI_BASE_URL',
-    'OPENAI_MODEL',
-    'OPENAI_VISION_MODEL',
-    'OPENAI_TEMPERATURE',
-    'VISION_MODEL',
-  ]);
-  const SYSTEM_HIDDEN_KEYS = new Set([
-    'ADMIN_AUTH_ENABLED',
-  ]);
   const activeItems =
     activeCategory === 'ai_model'
       ? rawActiveItems.filter((item) => {
@@ -122,46 +120,19 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-full px-4 pb-6 pt-4 md:px-6">
-      <div className="mb-5 rounded-xl bg-card/50 px-5 py-5 shadow-soft-card-strong">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">系统设置</h1>
-            <p className="text-xs leading-6 text-muted-text">
-              统一管理模型、数据源、通知、安全认证与导入能力。
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="settings-secondary"
-              onClick={resetDraft}
-              disabled={isLoading || isSaving}
-            >
-              重置
-            </Button>
-            <Button
-              type="button"
-              variant="settings-primary"
-              onClick={() => void save()}
-              disabled={!hasDirty || isSaving || isLoading}
-              isLoading={isSaving}
-              loadingText="保存中..."
-            >
-              {isSaving ? '保存中...' : `保存配置${dirtyCount ? ` (${dirtyCount})` : ''}`}
-            </Button>
-          </div>
-        </div>
-
-        {saveError ? (
-          <ApiErrorAlert
-            className="mt-3"
-            error={saveError}
-            actionLabel={retryAction === 'save' ? '重试保存' : undefined}
-            onAction={retryAction === 'save' ? () => void retry() : undefined}
-          />
-        ) : null}
-      </div>
+      <SettingsHeaderActionsCard
+        hasDirty={hasDirty}
+        dirtyCount={dirtyCount}
+        isLoading={isLoading}
+        isSaving={isSaving}
+        saveError={saveError}
+        retryAction={retryAction}
+        onRetry={retry}
+        onResetDraft={resetDraft}
+        onSaveDraft={save}
+        onReloadAfterImport={load}
+        serverItems={serverItems}
+      />
 
       {loadError ? (
         <ApiErrorAlert

@@ -140,6 +140,19 @@ class ConfigManager:
 
             return list(mutable_updates.keys()), skipped_masked, self.get_config_version()
 
+    def overwrite_content(self, content: str) -> str:
+        """Overwrite `.env` file content with atomic replace semantics."""
+        with self._lock:
+            if not self._env_path.parent.exists():
+                self._env_path.parent.mkdir(parents=True, exist_ok=True)
+
+            normalized_content = content.replace("\r\n", "\n").replace("\r", "\n")
+            if normalized_content and not normalized_content.endswith("\n"):
+                normalized_content += "\n"
+
+            self._atomic_write_content(normalized_content)
+            return self.get_config_version()
+
     def _atomic_upsert(self, updates: Dict[str, str]) -> None:
         """Write updates with atomic rename and in-place fallback for mounted files."""
         entries = self._read_entries()
@@ -155,11 +168,15 @@ class ConfigManager:
         if not self._env_path.parent.exists():
             self._env_path.parent.mkdir(parents=True, exist_ok=True)
 
-        temp_path = self._env_path.with_suffix(self._env_path.suffix + ".tmp")
         content = "\n".join(entry.render() for entry in entries)
         if content and not content.endswith("\n"):
             content += "\n"
 
+        self._atomic_write_content(content)
+
+    def _atomic_write_content(self, content: str) -> None:
+        """Write full text content with atomic replace and in-place fallback."""
+        temp_path = self._env_path.with_suffix(self._env_path.suffix + ".tmp")
         with temp_path.open("w", encoding="utf-8", newline="\n") as file_obj:
             file_obj.write(content)
             file_obj.flush()

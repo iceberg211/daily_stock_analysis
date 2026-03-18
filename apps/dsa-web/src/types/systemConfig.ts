@@ -97,6 +97,15 @@ export interface UpdateSystemConfigResponse {
   warnings: string[];
 }
 
+export interface ImportSystemConfigEnvResponse {
+  success: boolean;
+  configVersion: string;
+  reloadTriggered: boolean;
+  importedLineCount: number;
+  importedByteSize: number;
+  warnings: string[];
+}
+
 export interface ValidateSystemConfigRequest {
   items: SystemConfigUpdateItem[];
 }

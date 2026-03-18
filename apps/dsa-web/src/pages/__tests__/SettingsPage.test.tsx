@@ -1,5 +1,5 @@
 import type React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from '../SettingsPage';
 
@@ -13,6 +13,8 @@ const {
   applyPartialUpdate,
   refreshAfterExternalSave,
   refreshStatus,
+  exportEnv,
+  importEnv,
   useAuthMock,
   useSystemConfigMock,
 } = vi.hoisted(() => ({
@@ -25,6 +27,8 @@ const {
   applyPartialUpdate: vi.fn(),
   refreshAfterExternalSave: vi.fn(),
   refreshStatus: vi.fn(),
+  exportEnv: vi.fn(),
+  importEnv: vi.fn(),
   useAuthMock: vi.fn(),
   useSystemConfigMock: vi.fn(),
 }));
@@ -32,6 +36,13 @@ const {
 vi.mock('../../hooks', () => ({
   useAuth: () => useAuthMock(),
   useSystemConfig: () => useSystemConfigMock(),
+}));
+
+vi.mock('../../api/systemConfig', () => ({
+  systemConfigApi: {
+    exportEnv: () => exportEnv(),
+    importEnv: (file: File, reloadNow: boolean) => importEnv(file, reloadNow),
+  },
 }));
 
 vi.mock('../../components/settings', () => ({
@@ -109,6 +120,7 @@ const baseCategories = [
 type ConfigState = {
   categories: Array<{ category: string; title: string; description: string; displayOrder: number; fields: [] }>;
   itemsByCategory: Record<string, Array<Record<string, unknown>>>;
+  serverItems: Array<Record<string, unknown>>;
   issueByKey: Record<string, unknown[]>;
   activeCategory: string;
   setActiveCategory: typeof setActiveCategory;
@@ -135,70 +147,74 @@ type ConfigState = {
 type ConfigOverride = Partial<ConfigState>;
 
 function buildSystemConfigState(overrides: ConfigOverride = {}) {
+  const itemsByCategory = {
+    system: [
+      {
+        key: 'ADMIN_AUTH_ENABLED',
+        value: 'true',
+        rawValueExists: true,
+        isMasked: false,
+        schema: {
+          key: 'ADMIN_AUTH_ENABLED',
+          category: 'system',
+          dataType: 'boolean',
+          uiControl: 'switch',
+          isSensitive: false,
+          isRequired: false,
+          isEditable: true,
+          options: [],
+          validation: {},
+          displayOrder: 1,
+        },
+      },
+    ],
+    base: [
+      {
+        key: 'STOCK_LIST',
+        value: 'SH600000',
+        rawValueExists: true,
+        isMasked: false,
+        schema: {
+          key: 'STOCK_LIST',
+          category: 'base',
+          dataType: 'string',
+          uiControl: 'textarea',
+          isSensitive: false,
+          isRequired: false,
+          isEditable: true,
+          options: [],
+          validation: {},
+          displayOrder: 1,
+        },
+      },
+    ],
+    ai_model: [
+      {
+        key: 'LLM_CHANNELS',
+        value: 'primary',
+        rawValueExists: true,
+        isMasked: false,
+        schema: {
+          key: 'LLM_CHANNELS',
+          category: 'ai_model',
+          dataType: 'string',
+          uiControl: 'textarea',
+          isSensitive: false,
+          isRequired: false,
+          isEditable: true,
+          options: [],
+          validation: {},
+          displayOrder: 1,
+        },
+      },
+    ],
+  } as Record<string, Array<Record<string, unknown>>>;
+  const serverItems = Object.values(itemsByCategory).flat();
+
   return {
     categories: baseCategories,
-    itemsByCategory: {
-      system: [
-        {
-          key: 'ADMIN_AUTH_ENABLED',
-          value: 'true',
-          rawValueExists: true,
-          isMasked: false,
-          schema: {
-            key: 'ADMIN_AUTH_ENABLED',
-            category: 'system',
-            dataType: 'boolean',
-            uiControl: 'switch',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 1,
-          },
-        },
-      ],
-      base: [
-        {
-          key: 'STOCK_LIST',
-          value: 'SH600000',
-          rawValueExists: true,
-          isMasked: false,
-          schema: {
-            key: 'STOCK_LIST',
-            category: 'base',
-            dataType: 'string',
-            uiControl: 'textarea',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 1,
-          },
-        },
-      ],
-      ai_model: [
-        {
-          key: 'LLM_CHANNELS',
-          value: 'primary',
-          rawValueExists: true,
-          isMasked: false,
-          schema: {
-            key: 'LLM_CHANNELS',
-            category: 'ai_model',
-            dataType: 'string',
-            uiControl: 'textarea',
-            isSensitive: false,
-            isRequired: false,
-            isEditable: true,
-            options: [],
-            validation: {},
-            displayOrder: 1,
-          },
-        },
-      ],
-    },
+    itemsByCategory,
+    serverItems,
     issueByKey: {},
     activeCategory: 'system',
     setActiveCategory,
@@ -227,6 +243,30 @@ function buildSystemConfigState(overrides: ConfigOverride = {}) {
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    exportEnv.mockResolvedValue({
+      blob: new Blob(['STOCK_LIST=600519'], { type: 'text/plain' }),
+      filename: '.env',
+    });
+    importEnv.mockResolvedValue({
+      success: true,
+      configVersion: 'v2',
+      reloadTriggered: true,
+      importedLineCount: 1,
+      importedByteSize: 17,
+      warnings: [],
+    });
+    Object.defineProperty(window, 'confirm', {
+      writable: true,
+      value: vi.fn(() => true),
+    });
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      writable: true,
+      value: vi.fn(() => 'blob:test-url'),
+    });
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      writable: true,
+      value: vi.fn(() => undefined),
+    });
     useAuthMock.mockReturnValue({
       authEnabled: true,
       passwordChangeable: true,
@@ -303,5 +343,33 @@ describe('SettingsPage', () => {
 
     expect(refreshAfterExternalSave).toHaveBeenCalledWith(['LLM_CHANNELS']);
     expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('exports env file from header action button', async () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole('button', { name: '导出 .env' }));
+
+    await waitFor(() => {
+      expect(exportEnv).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('imports env file and reloads config', async () => {
+    const { container } = render(<SettingsPage />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+
+    const file = new File(['STOCK_LIST=300750\n'], 'backup.env', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await screen.findByText('待导入文件：backup.env');
+
+    fireEvent.click(screen.getByRole('button', { name: '导入已选文件' }));
+    fireEvent.click(await screen.findByRole('button', { name: '确认导入' }));
+
+    await waitFor(() => {
+      expect(importEnv).toHaveBeenCalledTimes(1);
+    });
+    expect(importEnv).toHaveBeenCalledWith(file, true);
+    expect(exportEnv).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });

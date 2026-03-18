@@ -86,6 +86,12 @@ class ConfigManagerTestCase(unittest.TestCase):
 
         self.assertEqual(self.env_path.read_text(encoding="utf-8"), "STOCK_LIST=000001\n")
 
+    def test_overwrite_content_normalizes_newlines_and_appends_final_newline(self) -> None:
+        new_version = self.manager.overwrite_content("A=1\r\nB=2")
+
+        self.assertTrue(new_version)
+        self.assertEqual(self.env_path.read_text(encoding="utf-8"), "A=1\nB=2\n")
+
 
 if __name__ == "__main__":
     unittest.main()

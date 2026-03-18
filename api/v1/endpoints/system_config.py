@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import PlainTextResponse
 
 from api.deps import get_system_config_service
 from api.v1.schemas.common import ErrorResponse
 from api.v1.schemas.system_config import (
+    ImportSystemConfigEnvResponse,
     SystemConfigConflictResponse,
     SystemConfigResponse,
     SystemConfigSchemaResponse,
@@ -56,6 +58,88 @@ def get_system_config(
                 "message": "Failed to load system configuration",
             },
         )
+
+
+@router.get(
+    "/config/env-export",
+    responses={
+        200: {"description": "Exported `.env` content"},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
+    summary="Export `.env` file",
+    description="Download the active `.env` file as plain text.",
+)
+def export_system_env(
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> PlainTextResponse:
+    """Export active `.env` content for backup."""
+    try:
+        payload = service.export_env_content()
+        headers = {
+            "Content-Disposition": f'attachment; filename="{payload["filename"]}"',
+        }
+        return PlainTextResponse(
+            content=payload["content"],
+            media_type="text/plain; charset=utf-8",
+            headers=headers,
+        )
+    except Exception as exc:
+        logger.error("Failed to export system `.env`: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": "Failed to export `.env`",
+            },
+        )
+
+
+@router.post(
+    "/config/env-import",
+    response_model=ImportSystemConfigEnvResponse,
+    responses={
+        200: {"description": "Imported `.env` content"},
+        400: {"description": "Invalid `.env` file", "model": ErrorResponse},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
+    summary="Import `.env` file",
+    description="Import uploaded `.env` content and optionally reload runtime config.",
+)
+def import_system_env(
+    file: UploadFile = File(..., description="`.env` file to import"),
+    reload_now: bool = Query(True, description="Whether to reload runtime config immediately"),
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> ImportSystemConfigEnvResponse:
+    """Import full `.env` file from uploaded content."""
+    try:
+        content_bytes = file.file.read()
+        payload = service.import_env_content(
+            content_bytes=content_bytes,
+            reload_now=reload_now,
+        )
+        return ImportSystemConfigEnvResponse.model_validate(payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_env_file",
+                "message": str(exc),
+            },
+        )
+    except Exception as exc:
+        logger.error("Failed to import system `.env`: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": "Failed to import `.env`",
+            },
+        )
+    finally:
+        try:
+            file.file.close()
+        except Exception:
+            pass
 
 
 @router.put(

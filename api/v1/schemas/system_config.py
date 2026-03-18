@@ -99,6 +99,17 @@ class UpdateSystemConfigResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list)
 
 
+class ImportSystemConfigEnvResponse(BaseModel):
+    """Import `.env` operation result payload."""
+
+    success: bool
+    config_version: str
+    reload_triggered: bool
+    imported_line_count: int
+    imported_byte_size: int
+    warnings: List[str] = Field(default_factory=list)
+
+
 class ValidateSystemConfigRequest(BaseModel):
     """Validation request payload."""
 

@@ -2,6 +2,7 @@ import apiClient from './index';
 import { createParsedApiError, getParsedApiError, type ParsedApiError } from './error';
 import { toCamelCase } from './utils';
 import type {
+  ImportSystemConfigEnvResponse,
   SystemConfigConflictResponse,
   SystemConfigResponse,
   SystemConfigSchemaResponse,
@@ -83,6 +84,24 @@ function toSnakeTestChannelPayload(payload: TestLLMChannelRequest): Record<strin
   };
 }
 
+function resolveDownloadFilename(contentDisposition: string | undefined, fallbackName = '.env'): string {
+  if (!contentDisposition) {
+    return fallbackName;
+  }
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  if (filenameMatch?.[1]) {
+    return filenameMatch[1];
+  }
+
+  return fallbackName;
+}
+
 export const systemConfigApi = {
   async getConfig(includeSchema = true): Promise<SystemConfigResponse> {
     const response = await apiClient.get<Record<string, unknown>>('/api/v1/system/config', {
@@ -110,6 +129,34 @@ export const systemConfigApi = {
       toSnakeTestChannelPayload(payload),
     );
     return toCamelCase<TestLLMChannelResponse>(response.data);
+  },
+
+  async exportEnv(): Promise<{ blob: Blob; filename: string }> {
+    const response = await apiClient.get<Blob>('/api/v1/system/config/env-export', {
+      responseType: 'blob',
+      headers: { Accept: 'text/plain' },
+    });
+
+    const filename = resolveDownloadFilename(response.headers['content-disposition'], '.env');
+    return {
+      blob: response.data,
+      filename,
+    };
+  },
+
+  async importEnv(file: File, reloadNow = true): Promise<ImportSystemConfigEnvResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await apiClient.post<Record<string, unknown>>(
+      '/api/v1/system/config/env-import',
+      formData,
+      {
+        params: { reload_now: reloadNow },
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    );
+    return toCamelCase<ImportSystemConfigEnvResponse>(response.data);
   },
 
   async update(payload: UpdateSystemConfigRequest): Promise<UpdateSystemConfigResponse> {

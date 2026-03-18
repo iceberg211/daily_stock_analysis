@@ -134,6 +134,7 @@ win-unpacked/
 
 - `.env` 放在 exe 同目录下
 - 首次启动时自动从 `.env.example` 复制生成
+- 可在 Web 设置页右上角使用「导出 .env / 导入 .env」按钮进行备份与恢复（适用于桌面端升级前后迁移配置）
 - 用户需要编辑 `.env` 配置以下内容：
   - `GEMINI_API_KEY` 或 `OPENAI_API_KEY`：AI 分析必需
   - `STOCK_LIST`：自选股列表（逗号分隔）

@@ -43,6 +43,7 @@ English | [简体中文](../README.md) | [繁體中文](README_CHT.md)
 | Analysis | Multi-dimensional Analysis | Technicals + chip distribution + sentiment + real-time quotes |
 | Market | Global Markets | A-shares, Hong Kong stocks, US stocks |
 | Review | Market Review | Daily overview, sectors, northbound capital flow |
+| Config | `.env` Import/Export | Backup current `.env` from Settings and restore by importing a local `.env` file |
 | Backtest | AI Backtest Validation | Auto-evaluate historical analysis accuracy, direction win rate, SL/TP hit rates |
 | Agent Q&A | Strategy Chat | Multi-turn strategy chat with 11 built-in skills (Web/Bot/API) |
 | Notifications | Multi-channel Push | Telegram, Discord, Email, WeChat Work, Feishu, etc. |
@@ -438,6 +439,17 @@ Enable the FastAPI service for configuration management and triggering analysis 
 | `/api/health` | GET | Health check |
 
 > Note: `POST /api/v1/analysis/analyze` supports only one stock when `async_mode=false`; batch `stock_codes` requires `async_mode=true`. The async `202` response returns a single `task_id` for one stock, or an `accepted` / `duplicates` summary for batch requests.
+
+### `.env` Backup & Restore
+
+Use the top-right actions in **Settings**:
+
+1. **Export `.env`**: download the current active `.env` file as a backup.
+2. **Import `.env`**: upload a local `.env` file to overwrite current config and trigger runtime reload.
+
+API endpoints:
+- `GET /api/v1/system/config/env-export`
+- `POST /api/v1/system/config/env-import` (`multipart/form-data`, field name: `file`)
 
 > For detailed instructions, see [Full Guide - API Service](full-guide_EN.md#fastapi-api-service)
 

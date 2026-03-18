@@ -9,6 +9,7 @@
 
 import logging
 import time
+import uuid
 from collections import defaultdict
 from typing import Dict, List, Optional, Type, Callable
 
@@ -284,10 +285,10 @@ class CommandDispatcher:
             response = command.execute(message, args)
             logger.info(f"[Dispatcher] 命令 {cmd_name} 执行成功")
             return response
-        except Exception as e:
-            logger.error(f"[Dispatcher] 命令 {cmd_name} 执行失败: {e}")
-            logger.exception(e)
-            return BotResponse.error_response(f"命令执行失败: {str(e)[:100]}")
+        except Exception:
+            error_id = str(uuid.uuid4())[:8]
+            logger.exception("[Dispatcher] 命令 %s 执行失败 [error_id=%s]", cmd_name, error_id)
+            return BotResponse.error_response(f"命令执行失败，请稍后重试（错误ID: {error_id}）")
     
     def set_help_command_getter(self, getter: Callable) -> None:
         """

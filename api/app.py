@@ -189,8 +189,18 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
                     status_code=404,
                     content={"error": "not_found", "message": f"API endpoint /{full_path} not found"}
                 )
-            
-            file_path = static_dir / full_path
+
+            try:
+                static_root = static_dir.resolve()
+                file_path = (static_root / full_path).resolve()
+                # Guardrail: never serve files outside static root (path traversal / symlink escape).
+                file_path.relative_to(static_root)
+            except Exception:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "not_found", "message": "Resource not found"}
+                )
+
             if file_path.exists() and file_path.is_file():
                 # Issue #520: Explicitly resolve MIME type to avoid
                 # browsers rejecting JS modules served as text/plain.
